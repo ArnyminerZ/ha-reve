@@ -7,6 +7,8 @@
  * title: Optional title
  * watch_hours: 2               # how long a "notify me" alert stays armed
  * notify_entity_id: notify.mobile_app_x   # optional (string or list)
+ *
+ * A visual editor is available in the dashboard card editor.
  */
 const STATE = {
   available: { key: "free", icon: "mdi:ev-station", label: "Free" },
@@ -55,8 +57,16 @@ class ReveLocationCard extends HTMLElement {
     return 3;
   }
 
-  static getStubConfig() {
-    return {};
+  static getStubConfig(hass) {
+    const loc = Object.values(hass?.states || {})
+      .map((s) => s.entity_id.startsWith("sensor.") && s.attributes.connectors !== undefined
+        ? s.attributes.location_name : null)
+      .find(Boolean);
+    return loc ? { location: loc } : {};
+  }
+
+  static getConfigElement() {
+    return document.createElement("reve-location-card-editor");
   }
 
   _chargers() {
@@ -185,7 +195,61 @@ class ReveLocationCard extends HTMLElement {
   }
 }
 
+class ReveLocationCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config;
+    this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  _schema() {
+    const locations = [...new Set(Object.values(this._hass.states)
+      .filter((s) => s.entity_id.startsWith("sensor.") && s.attributes.connectors !== undefined
+        && s.attributes.location_name)
+      .map((s) => s.attributes.location_name))].sort();
+    return [
+      { name: "title", selector: { text: {} } },
+      { name: "location", selector: { select: { options: locations, custom_value: true, mode: "dropdown" } } },
+      { name: "entities", selector: { entity: { integration: "reve", domain: "sensor", device_class: "enum", multiple: true } } },
+      { name: "watch_hours", selector: { number: { min: 1, max: 168, step: 1, mode: "box", unit_of_measurement: "h" } } },
+      { name: "notify_entity_id", selector: { entity: { domain: "notify", multiple: true } } },
+    ];
+  }
+
+  _update() {
+    if (!this._hass || !this._config) return;
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (item) => ({
+        title: "Title (optional)",
+        location: "Location (empty = all locations)",
+        entities: "Chargers (optional, overrides location)",
+        watch_hours: "Keep the alert armed for",
+        notify_entity_id: "Notify through (empty = Home Assistant notification)",
+      })[item.name] || item.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        const config = { ...ev.detail.value };
+        for (const [k, v] of Object.entries(config)) {
+          if (v === "" || v === undefined || (Array.isArray(v) && !v.length)) delete config[k];
+        }
+        this._config = config;
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          bubbles: true, composed: true, detail: { config } }));
+      });
+      this.appendChild(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.schema = this._schema();
+    this._form.data = { watch_hours: 2, ...this._config };
+  }
+}
+
 customElements.define("reve-location-card", ReveLocationCard);
+customElements.define("reve-location-card-editor", ReveLocationCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "reve-location-card",
