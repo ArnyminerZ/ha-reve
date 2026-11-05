@@ -4,7 +4,13 @@ Monitor public EV chargers listed on [Mapa Reve](https://www.mapareve.es) and ge
 
 ## Installation
 
-**HACS (custom repository):** HACS → ⋮ → *Custom repositories* → add `https://github.com/ArnyminerZ/ha-reve` as type *Integration* → install *Reve* → restart Home Assistant. Then *Settings → Devices & services → Add integration → Reve*.
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ArnyminerZ&repository=ha-reve&category=integration)
+
+Once installed and restarted, set it up with:
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=reve)
+
+**HACS (custom repository), manually:** HACS → ⋮ → *Custom repositories* → add `https://github.com/ArnyminerZ/ha-reve` as type *Integration* → install *Reve* → restart Home Assistant. Then *Settings → Devices & services → Add integration → Reve*.
 
 **Manual:** copy `custom_components/reve` into your Home Assistant `custom_components` folder and restart.
 
