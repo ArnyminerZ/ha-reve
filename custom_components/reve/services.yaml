@@ -1,0 +1,30 @@
+watch_availability:
+  target:
+    entity:
+      integration: reve
+      domain: sensor
+      device_class: enum
+  fields:
+    duration:
+      required: true
+      default: { hours: 2 }
+      selector:
+        duration:
+          enable_day: true
+    notify_entity_id:
+      required: false
+      selector:
+        entity:
+          domain: notify
+          multiple: true
+    message:
+      required: false
+      example: "The charger is free, go!"
+      selector:
+        text:
+cancel_watch:
+  target:
+    entity:
+      integration: reve
+      domain: sensor
+      device_class: enum

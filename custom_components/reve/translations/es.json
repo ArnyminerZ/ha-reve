@@ -1,0 +1,176 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar con Reve",
+        "description": "Introduce tu API key personal de Reve. Actúa como pasarela: después podrás añadir cargadores con su EVSE id.",
+        "data": {
+          "api_key": "API key",
+          "rate_tier": "Plan de la API"
+        },
+        "data_description": {
+          "rate_tier": "Standard keys allow 5 requests per URL and hour, special keys 100. This limits how often chargers can be polled."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "The API key was rejected. Enter a valid key.",
+        "data": {
+          "api_key": "API key"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Reve",
+        "data": {
+          "api_key": "API key",
+          "rate_tier": "API plan"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "La API key fue rechazada.",
+      "cannot_connect": "No se pudo conectar con la API de Reve.",
+      "rate_limited": "Cuota de peticiones agotada. Inténtalo más tarde.",
+      "unknown": "Error inesperado."
+    },
+    "abort": {
+      "already_configured": "This API key is already configured.",
+      "reauth_successful": "Re-authentication successful.",
+      "reconfigure_successful": "Reconfiguration successful."
+    }
+  },
+  "config_subentries": {
+    "charger": {
+      "initiate_flow": {
+        "user": "Añadir cargador"
+      },
+      "entry_type": "Cargador",
+      "step": {
+        "user": {
+          "title": "Añadir cargador",
+          "description": "Introduce el EVSE id del cargador, p. ej. `ES*IBD*E142206*1`.",
+          "data": {
+            "evse_id": "EVSE id",
+            "name": "Nombre (opcional)"
+          }
+        }
+      },
+      "error": {
+        "invalid_evse_id": "Not a valid EVSE id. Expected a format like ES*IBD*E142206*1.",
+        "evse_not_found": "No charger with that EVSE id was found.",
+        "invalid_auth": "The API key was rejected.",
+        "cannot_connect": "Could not reach the Reve API.",
+        "rate_limited": "The API request quota is exhausted. Try again later.",
+        "unknown": "Unexpected error."
+      },
+      "abort": {
+        "already_configured": "This charger is already added."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling",
+        "description": "How often to poll the chargers. The minimum ({minimum} min) keeps requests inside your API quota.",
+        "data": {
+          "scan_interval": "Polling interval"
+        }
+      }
+    }
+  },
+  "selector": {
+    "rate_tier": {
+      "options": {
+        "standard": "Standard (5 requests/URL/hour)",
+        "special": "Special (100 requests/URL/hour)"
+      }
+    }
+  },
+  "device": {
+    "connector": {
+      "name": "Conector {number}"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "available": "Disponible",
+          "blocked": "Bloqueado",
+          "charging": "Cargando",
+          "inoperative": "Inoperativo",
+          "outoforder": "Fuera de servicio",
+          "planned": "Planificado",
+          "removed": "Retirado",
+          "reserved": "Reservado",
+          "unknown": "Desconocido"
+        }
+      },
+      "last_status_change": {
+        "name": "Último cambio de estado"
+      },
+      "watching_until": {
+        "name": "Aviso de disponibilidad hasta"
+      },
+      "connector_max_power": {
+        "name": "Potencia máxima"
+      },
+      "connector_max_current": {
+        "name": "Corriente máxima"
+      },
+      "connector_type": {
+        "name": "Tipo de conector"
+      }
+    },
+    "binary_sensor": {
+      "free": {
+        "name": "Libre"
+      }
+    },
+    "event": {
+      "availability_alert": {
+        "name": "Aviso de disponibilidad",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "available": "Available"
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "already_available": {
+      "message": "{name} is already available."
+    },
+    "invalid_duration": {
+      "message": "The duration must be greater than zero and at most 7 days."
+    }
+  },
+  "services": {
+    "watch_availability": {
+      "name": "Avisar cuando esté disponible",
+      "description": "Get notified when the charger becomes available within the given time.",
+      "fields": {
+        "duration": {
+          "name": "Watch for",
+          "description": "How long to keep watching (max 7 days)."
+        },
+        "notify_entity_id": {
+          "name": "Notify entities",
+          "description": "Notify entities to alert. If empty, a persistent notification is created."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Custom message. Defaults to \"<charger> is now available.\""
+        }
+      }
+    },
+    "cancel_watch": {
+      "name": "Cancel availability alert",
+      "description": "Stop watching the charger."
+    }
+  }
+}
