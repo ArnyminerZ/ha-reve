@@ -17,7 +17,7 @@ Once installed and restarted, set it up with:
 ## How it works
 
 * **Hub (gateway)** – add the integration once with your personal Reve API key.
-* **Chargers (subentries)** – use *Add charger* on the integration and enter the EVSE id (e.g. `ES*IBD*E142206*1`). Adding one outlet also adds the other outlets of its station (`...*1`, `...*2`, …); each charger becomes a device; each of its connectors a child device.
+* **Chargers (subentries)** – use *Add charger* on the integration and enter the EVSE id (e.g. `ES*IBD*E142206*1`). Adding one outlet also adds every other outlet of its location (the API has no direct lookup, so the operator's locations are scanned page by page; this can take up to a minute or two and shows progress); each outlet becomes a device; each of its connectors a child device.
 * The API key is validated with one cheap call; the charger is validated against `/evses/{id}`, and its static data (connectors, power) is stored so it is not re-fetched.
 
 ### Entities per charger

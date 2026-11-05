@@ -48,7 +48,7 @@
       "step": {
         "user": {
           "title": "Añadir cargador",
-          "description": "Introduce el EVSE id del cargador, p. ej. `ES*IBD*E142206*1`. También se añaden los demás puntos de la misma estación (p. ej. `*2`, `*3`).",
+          "description": "Introduce el EVSE id del cargador, p. ej. `ES*IBD*E142206*1`. También se añaden todos los puntos de su ubicación.",
           "data": {
             "evse_id": "EVSE id",
             "name": "Nombre (opcional)"
@@ -64,7 +64,12 @@
         "unknown": "Unexpected error."
       },
       "abort": {
-        "already_configured": "This charger is already added."
+        "already_configured": "This charger is already added.",
+        "invalid_auth": "La API key fue rechazada.",
+        "rate_limited": "Cuota de peticiones agotada. Inténtalo más tarde."
+      },
+      "progress": {
+        "search": "Buscando la ubicación de {evse_id} y sus otros puntos de carga… puede tardar un minuto."
       }
     }
   },

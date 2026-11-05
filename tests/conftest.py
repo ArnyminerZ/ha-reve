@@ -47,7 +47,21 @@ def mock_api():
                 return {**EVSE, "evse_id": evse_id}
             raise ReveNotFoundError
 
-        api.stations = {"ES*IBD*E142206*1", "ES*IBD*E11900*1", "ES*IBD*E11900*2"}
+        api.locations = [
+            {
+                "id": "loc1",
+                "name": "NA-Oteiza-001",
+                "evses": [
+                    {**EVSE, "evse_id": "ES*IBD*E87441*1"},
+                    {**EVSE, "evse_id": "ES*IBD*E87442*1"},
+                    {**EVSE, "evse_id": "ES*IBD*E87442*2"},
+                ],
+            },
+        ]
+        api.get_locations = AsyncMock(
+            side_effect=lambda party, page, limit=100: api.locations if page == 1 else []
+        )
+        api.stations = {"ES*IBD*E142206*1", "ES*IBD*E87441*1", "ES*IBD*E87442*1", "ES*IBD*E87442*2"}
         api.get_evse = AsyncMock(side_effect=get_evse)
         api.get_status = AsyncMock(return_value=status)
         yield api

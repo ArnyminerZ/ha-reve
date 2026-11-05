@@ -48,7 +48,7 @@
       "step": {
         "user": {
           "title": "Add charger",
-          "description": "Enter the EVSE id of the charger, e.g. `ES*IBD*E142206*1`. The other outlets of the same station (e.g. `*2`, `*3`) are added too.",
+          "description": "Enter the EVSE id of the charger, e.g. `ES*IBD*E142206*1`. All the outlets of its location are added too.",
           "data": {
             "evse_id": "EVSE id",
             "name": "Name (optional)"
@@ -64,7 +64,12 @@
         "unknown": "Unexpected error."
       },
       "abort": {
-        "already_configured": "This charger is already added."
+        "already_configured": "This charger is already added.",
+        "invalid_auth": "The API key was rejected.",
+        "rate_limited": "The API request quota is exhausted. Try again later."
+      },
+      "progress": {
+        "search": "Searching the location of {evse_id} and its other outlets… this can take a minute."
       }
     }
   },

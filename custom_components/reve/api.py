@@ -90,6 +90,13 @@ class ReveApi:
             data = data[0]
         return data
 
+    async def get_locations(
+        self, party_id: str, page: int, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Return one page of locations (with their EVSEs) of a CPO."""
+        data = await self._get("/locations", {"party_id": party_id, "page": page, "limit": limit})
+        return data if isinstance(data, list) else []
+
     async def get_status(self, evse_id: str) -> ReveStatus:
         """Return the live status of an EVSE."""
         data = await self._get(f"/evses/{evse_id}/status")

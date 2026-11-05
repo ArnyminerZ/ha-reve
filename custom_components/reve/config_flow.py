@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -47,6 +48,8 @@ from .const import (
     CONF_COORDINATES,
     CONF_EVSE_ID,
     CONF_EVSE_UID,
+    CONF_LOCATION_ID,
+    CONF_LOCATION_NAME,
     CONF_PHYSICAL_REFERENCE,
     CONF_RATE_TIER,
     CONF_SCAN_INTERVAL,
@@ -60,7 +63,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-MAX_SIBLINGS = 12
 EVSE_ID_RE = re.compile(r"^[A-Z]{2}\*[A-Z0-9]{3}\*E[A-Z0-9*]+$")
 
 TIER_SELECTOR = SelectSelector(
@@ -227,48 +229,63 @@ def _charger_data(evse_id: str, evse: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _discover_station(api: ReveApi, evse_id: str) -> dict[str, dict[str, Any]]:
-    """Fetch the entered EVSE plus its siblings (same station, other numbers).
+LOCATION_PAGE_SIZE = 100
+LOCATION_BATCH = 4  # pages fetched concurrently while searching
 
-    EVSE ids end in the outlet number (ES*IBD*E11900*1, ...*2, ...). Siblings
-    are probed from 1 upwards; probing stops at the first gap after the entered
-    number. Only the entered EVSE is allowed to raise; sibling failures are skipped.
+
+def _location_evses(location: dict[str, Any]) -> list[dict[str, Any]]:
+    evses = location.get("evses") or []
+    return [evses] if isinstance(evses, dict) else evses
+
+
+async def _find_location(api: ReveApi, evse_id: str) -> dict[str, Any] | None:
+    """Scan the CPO's locations until one contains the EVSE.
+
+    The API cannot look a location up by EVSE id, so the CPO (the second part of
+    the id, ES*IBD*...) is paged through a few pages at a time and the search
+    stops as soon as the EVSE is found.
     """
-    found = {evse_id: await api.get_evse(evse_id)}
-    prefix, _, number = evse_id.rpartition("*")
-    if not number.isdigit():
-        return found
-    entered = int(number)
-    for n in range(1, MAX_SIBLINGS + 1):
-        sibling = f"{prefix}*{n}"
-        if sibling == evse_id:
-            continue
-        try:
-            found[sibling] = await api.get_evse(sibling)
-        except ReveAuthError:
-            raise
-        except ReveNotFoundError:
-            if n > entered:
-                break
-        except ReveError:
-            _LOGGER.debug("Could not probe sibling %s", sibling)
-    return dict(sorted(found.items(), key=lambda kv: int(kv[0].rpartition("*")[2])))
+    party_id = evse_id.split("*")[1]
+    page = 1
+    while True:
+        pages = await asyncio.gather(
+            *(
+                api.get_locations(party_id, p, LOCATION_PAGE_SIZE)
+                for p in range(page, page + LOCATION_BATCH)
+            )
+        )
+        for locations in pages:
+            for location in locations:
+                if any(e.get("evse_id") == evse_id for e in _location_evses(location)):
+                    return location
+        if any(len(locations) < LOCATION_PAGE_SIZE for locations in pages):
+            return None  # reached the last page
+        page += LOCATION_BATCH
 
 
 class ChargerSubentryFlow(ConfigSubentryFlow):
-    """Add a charger (and the other outlets of its station) by EVSE id."""
+    """Add a charger, together with every outlet of its location."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._evse_id = ""
+        self._name = ""
+        self._evse: dict[str, Any] = {}
+        self._task: asyncio.Task[dict[str, Any] | None] | None = None
+        self._location: dict[str, Any] | None = None
+
+    def _api(self) -> ReveApi:
+        return ReveApi(async_get_clientsession(self.hass), self._get_entry().data[CONF_API_KEY])
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        entry = self._get_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
             evse_id = user_input[CONF_EVSE_ID].strip().upper()
             if not EVSE_ID_RE.match(evse_id):
                 errors[CONF_EVSE_ID] = "invalid_evse_id"
             else:
-                api = ReveApi(async_get_clientsession(self.hass), entry.data[CONF_API_KEY])
                 try:
-                    found = await _discover_station(api, evse_id)
+                    self._evse = await self._api().get_evse(evse_id)
                 except ReveNotFoundError:
                     errors[CONF_EVSE_ID] = "evse_not_found"
                 except ReveAuthError:
@@ -280,34 +297,9 @@ class ChargerSubentryFlow(ConfigSubentryFlow):
                 except ReveError:
                     errors["base"] = "unknown"
                 else:
-                    known = {s.unique_id for s in entry.subentries.values()}
-                    new = {k: v for k, v in found.items() if k not in known}
-                    if not new:
-                        return self.async_abort(reason="already_configured")
-                    name = (user_input.get("name") or "").strip()
-                    multiple = len(found) > 1
-
-                    def title(eid: str) -> str:
-                        if not name:
-                            return eid
-                        return f"{name} {eid.rpartition('*')[2]}" if multiple else name
-
-                    items = list(new.items())
-                    # The flow itself creates the first one; add the rest directly.
-                    for eid, evse in items[1:]:
-                        self.hass.config_entries.async_add_subentry(
-                            entry,
-                            ConfigSubentry(
-                                data=MappingProxyType(_charger_data(eid, evse)),
-                                subentry_type=SUBENTRY_TYPE_CHARGER,
-                                title=title(eid),
-                                unique_id=eid,
-                            ),
-                        )
-                    eid, evse = items[0]
-                    return self.async_create_entry(
-                        title=title(eid), unique_id=eid, data=_charger_data(eid, evse)
-                    )
+                    self._evse_id = evse_id
+                    self._name = (user_input.get("name") or "").strip()
+                    return await self.async_step_search()
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -318,6 +310,95 @@ class ChargerSubentryFlow(ConfigSubentryFlow):
             ),
             errors=errors,
         )
+
+    async def async_step_search(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Find the location of the charger (can take a while: shows progress)."""
+        if self._task is None:
+            self._task = self.hass.async_create_task(_find_location(self._api(), self._evse_id))
+        if not self._task.done():
+            return self.async_show_progress(
+                step_id="search",
+                progress_action="search",
+                progress_task=self._task,
+                description_placeholders={"evse_id": self._evse_id},
+            )
+        try:
+            self._location = self._task.result()
+        except ReveAuthError:
+            return self.async_show_progress_done(next_step_id="auth_failed")
+        except ReveRateLimitError:
+            return self.async_show_progress_done(next_step_id="rate_limited")
+        except ReveError as err:
+            _LOGGER.warning("Could not look up the location of %s: %s", self._evse_id, err)
+            self._location = None
+        return self.async_show_progress_done(next_step_id="finish")
+
+    async def async_step_auth_failed(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        return self.async_abort(reason="invalid_auth")
+
+    async def async_step_rate_limited(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        return self.async_abort(reason="rate_limited")
+
+    @callback
+    def async_remove(self) -> None:
+        if self._task and not self._task.done():
+            self._task.cancel()
+
+    async def async_step_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        entry = self._get_entry()
+        location = self._location
+        # Without a location we can only add the charger that was entered.
+        evses = _location_evses(location) if location else [self._evse]
+        found = {
+            e["evse_id"]: e for e in evses if e.get("evse_id") and e.get("connectors") is not None
+        }
+        found.setdefault(self._evse_id, self._evse)
+        ordered = sorted(found.items(), key=lambda kv: kv[0])
+        known = {s.unique_id for s in entry.subentries.values()}
+        new = [(k, v) for k, v in ordered if k not in known]
+        if not new:
+            return self.async_abort(reason="already_configured")
+
+        base = self._name or (location or {}).get("name") or ""
+        multiple = len(ordered) > 1
+
+        def title(eid: str) -> str:
+            if not base:
+                return eid
+            if not multiple:
+                return base
+            return f"{base} {ordered_ids.index(eid) + 1}"
+
+        ordered_ids = [k for k, _ in ordered]
+
+        def data(eid: str, evse: dict[str, Any]) -> dict[str, Any]:
+            result = _charger_data(eid, evse)
+            if location:
+                result[CONF_LOCATION_ID] = location.get("id")
+                result[CONF_LOCATION_NAME] = location.get("name")
+            return result
+
+        # The flow itself creates the first one; add the rest directly.
+        for eid, evse in new[1:]:
+            self.hass.config_entries.async_add_subentry(
+                entry,
+                ConfigSubentry(
+                    data=MappingProxyType(data(eid, evse)),
+                    subentry_type=SUBENTRY_TYPE_CHARGER,
+                    title=title(eid),
+                    unique_id=eid,
+                ),
+            )
+        eid, evse = new[0]
+        return self.async_create_entry(title=title(eid), unique_id=eid, data=data(eid, evse))
 
 
 class ReveOptionsFlow(OptionsFlow):

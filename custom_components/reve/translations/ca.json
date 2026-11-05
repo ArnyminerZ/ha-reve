@@ -48,7 +48,7 @@
       "step": {
         "user": {
           "title": "Afegir carregador",
-          "description": "Introdueix l'EVSE id del carregador, p. ex. `ES*IBD*E142206*1`. També s'afegeixen els altres punts de la mateixa estació (p. ex. `*2`, `*3`).",
+          "description": "Introdueix l'EVSE id del carregador, p. ex. `ES*IBD*E142206*1`. També s'afegeixen tots els punts de la seua ubicació.",
           "data": {
             "evse_id": "EVSE id",
             "name": "Nom (opcional)"
@@ -64,7 +64,12 @@
         "unknown": "Error inesperat."
       },
       "abort": {
-        "already_configured": "Aquest carregador ja està afegit."
+        "already_configured": "Aquest carregador ja està afegit.",
+        "invalid_auth": "L'API key ha sigut rebutjada.",
+        "rate_limited": "S'ha esgotat la quota de peticions. Torna-ho a provar més tard."
+      },
+      "progress": {
+        "search": "Buscant la ubicació de {evse_id} i els seus altres punts de càrrega… pot tardar un minut."
       }
     }
   },
