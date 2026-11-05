@@ -164,7 +164,7 @@
         },
         "message": {
           "name": "Message",
-          "description": "Custom message. Defaults to \"<charger> is now available.\""
+          "description": "Custom message. Defaults to a message saying the charger is now available."
         }
       }
     },
