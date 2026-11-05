@@ -49,7 +49,7 @@ When the status becomes `AVAILABLE` within the window the alert is sent once, th
 
 ## Dashboard card
 
-The integration bundles a Lovelace card, loaded automatically (no resource to add). It has a visual editor, or you can use YAML. It lists every charger of a location with its state (free / in use / out of service), how long it has been in that state, and a **Notify me** button that arms the availability alert (tap again to cancel).
+The integration bundles a Lovelace card, loaded automatically (no resource to add). It has a visual editor (or use YAML) and is translated into English, Spanish and Catalan. It lists every charger of a location with its state (free / in use / out of service), how long it has been in that state, and a **Notify me** button that arms the availability alert (tap again to cancel).
 
 ```yaml
 type: custom:reve-location-card

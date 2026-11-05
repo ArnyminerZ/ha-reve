@@ -11,24 +11,78 @@
  * A visual editor is available in the dashboard card editor.
  */
 const STATE = {
-  available: { key: "free", icon: "mdi:ev-station", label: "Free" },
-  charging: { key: "busy", icon: "mdi:ev-plug-type2", label: "In use" },
-  reserved: { key: "busy", icon: "mdi:calendar-lock", label: "Reserved" },
-  blocked: { key: "busy", icon: "mdi:car-brake-alert", label: "Blocked" },
-  planned: { key: "off", icon: "mdi:calendar-clock", label: "Planned" },
-  inoperative: { key: "fault", icon: "mdi:alert-circle", label: "Out of service" },
-  outoforder: { key: "fault", icon: "mdi:alert-circle", label: "Out of order" },
-  removed: { key: "fault", icon: "mdi:alert-circle", label: "Removed" },
-  unknown: { key: "off", icon: "mdi:help-circle", label: "Unknown" },
-  unavailable: { key: "off", icon: "mdi:help-circle", label: "Unavailable" },
+  available: { key: "free", icon: "mdi:ev-station" },
+  charging: { key: "busy", icon: "mdi:ev-plug-type2" },
+  reserved: { key: "busy", icon: "mdi:calendar-lock" },
+  blocked: { key: "busy", icon: "mdi:car-brake-alert" },
+  planned: { key: "off", icon: "mdi:calendar-clock" },
+  inoperative: { key: "fault", icon: "mdi:alert-circle" },
+  outoforder: { key: "fault", icon: "mdi:alert-circle" },
+  removed: { key: "fault", icon: "mdi:alert-circle" },
+  unknown: { key: "off", icon: "mdi:help-circle" },
+  unavailable: { key: "off", icon: "mdi:help-circle" },
 };
 
-const fmtDuration = (ms) => {
+const TRANSLATIONS = {
+  en: {
+    available: "Free", charging: "In use", reserved: "Reserved", blocked: "Blocked",
+    planned: "Planned", inoperative: "Out of service", outoforder: "Out of order",
+    removed: "Removed", unknown: "Unknown", unavailable: "Unavailable",
+    in_use_for: "In use for {time}", free_for: "Free for {time}",
+    notify_me: "Notify me", until: "Until {time}", cancel_alert: "Cancel alert",
+    n_free: "{free}/{total} free", title: "Reve chargers", empty: "No Reve chargers found.",
+    less_than_minute: "<1 min", minutes: "min",
+    editor_title: "Title (optional)",
+    editor_location: "Location (empty = all locations)",
+    editor_entities: "Chargers (optional, overrides location)",
+    editor_watch_hours: "Keep the alert armed for",
+    editor_notify: "Notify through (empty = Home Assistant notification)",
+  },
+  es: {
+    available: "Libre", charging: "En uso", reserved: "Reservado", blocked: "Bloqueado",
+    planned: "Planificado", inoperative: "Fuera de servicio", outoforder: "Averiado",
+    removed: "Retirado", unknown: "Desconocido", unavailable: "No disponible",
+    in_use_for: "En uso desde hace {time}", free_for: "Libre desde hace {time}",
+    notify_me: "Avisarme", until: "Hasta las {time}", cancel_alert: "Cancelar aviso",
+    n_free: "{free}/{total} libres", title: "Cargadores Reve",
+    empty: "No se han encontrado cargadores Reve.",
+    less_than_minute: "<1 min", minutes: "min",
+    editor_title: "Título (opcional)",
+    editor_location: "Ubicación (vacío = todas las ubicaciones)",
+    editor_entities: "Cargadores (opcional, anula la ubicación)",
+    editor_watch_hours: "Mantener el aviso activo durante",
+    editor_notify: "Notificar mediante (vacío = notificación de Home Assistant)",
+  },
+  ca: {
+    available: "Lliure", charging: "En ús", reserved: "Reservat", blocked: "Bloquejat",
+    planned: "Planificat", inoperative: "Fora de servei", outoforder: "Avariat",
+    removed: "Retirat", unknown: "Desconegut", unavailable: "No disponible",
+    in_use_for: "En ús des de fa {time}", free_for: "Lliure des de fa {time}",
+    notify_me: "Avisa'm", until: "Fins a les {time}", cancel_alert: "Cancel·la l'avís",
+    n_free: "{free}/{total} lliures", title: "Carregadors Reve",
+    empty: "No s'ha trobat cap carregador Reve.",
+    less_than_minute: "<1 min", minutes: "min",
+    editor_title: "Títol (opcional)",
+    editor_location: "Ubicació (buit = totes les ubicacions)",
+    editor_entities: "Carregadors (opcional, substitueix la ubicació)",
+    editor_watch_hours: "Mantén l'avís actiu durant",
+    editor_notify: "Notifica mitjançant (buit = notificació de Home Assistant)",
+  },
+};
+
+const lang = (hass) => String(hass?.language || "en").toLowerCase().split("-")[0];
+
+const tr = (hass, key, vars = {}) => {
+  const text = (TRANSLATIONS[lang(hass)] || TRANSLATIONS.en)[key] ?? TRANSLATIONS.en[key] ?? key;
+  return text.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+};
+
+const fmtDuration = (hass, ms) => {
   const m = Math.max(0, Math.floor(ms / 60000));
-  if (m < 1) return "<1 min";
+  if (m < 1) return tr(hass, "less_than_minute");
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
   if (d) return `${d}d ${h}h`;
-  return h ? `${h}h ${mm}m` : `${mm} min`;
+  return h ? `${h}h ${mm}m` : `${mm} ${tr(hass, "minutes")}`;
 };
 
 class ReveLocationCard extends HTMLElement {
@@ -109,26 +163,26 @@ class ReveLocationCard extends HTMLElement {
       .filter(Boolean).join(", ");
     let detail = connectors;
     if (s.state === "charging" && a.last_status_change) {
-      detail = `In use for ${fmtDuration(Date.now() - new Date(a.last_status_change))}`;
+      detail = tr(this._hass, "in_use_for", { time: fmtDuration(this._hass, Date.now() - new Date(a.last_status_change)) });
     } else if (s.state === "available" && a.last_status_change) {
-      detail = `Free for ${fmtDuration(Date.now() - new Date(a.last_status_change))}`;
+      detail = tr(this._hass, "free_for", { time: fmtDuration(this._hass, Date.now() - new Date(a.last_status_change)) });
     }
     const watching = a.watching_until ? new Date(a.watching_until) : null;
     let action = "";
     if (watching) {
-      const t = watching.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      action = `<button class="act on" data-act="cancel" data-id="${s.entity_id}" title="Cancel alert">
-        <ha-icon icon="mdi:bell-ring"></ha-icon><span>Until ${t}</span></button>`;
+      const t = watching.toLocaleTimeString(lang(this._hass), { hour: "2-digit", minute: "2-digit" });
+      action = `<button class="act on" data-act="cancel" data-id="${s.entity_id}" title="${tr(this._hass, "cancel_alert")}">
+        <ha-icon icon="mdi:bell-ring"></ha-icon><span>${tr(this._hass, "until", { time: t })}</span></button>`;
     } else if (st.key === "busy") {
       action = `<button class="act" data-act="watch" data-id="${s.entity_id}" ${this._busy.has(s.entity_id) ? "disabled" : ""}>
-        <ha-icon icon="mdi:bell-plus-outline"></ha-icon><span>Notify me</span></button>`;
+        <ha-icon icon="mdi:bell-plus-outline"></ha-icon><span>${tr(this._hass, "notify_me")}</span></button>`;
     }
     const name = (a.friendly_name || s.entity_id).replace(/'/g, "&#39;");
     return `<div class="row ${st.key}">
       <ha-icon class="ico" icon="${st.icon}"></ha-icon>
       <div class="txt" data-more="${s.entity_id}">
         <div class="name">${name}</div>
-        <div class="sub"><b>${st.label}</b>${detail ? " · " + detail : ""}</div>
+        <div class="sub"><b>${tr(this._hass, s.state in STATE ? s.state : "unknown")}</b>${detail ? " · " + detail : ""}</div>
       </div>${action}</div>`;
   }
 
@@ -140,12 +194,12 @@ class ReveLocationCard extends HTMLElement {
     for (const [name, list] of groups) {
       const free = list.filter((s) => s.state === "available").length;
       body += `<div class="loc"><span>${title && groups.size === 1 ? "" : name}</span>
-        <span class="count ${free ? "free" : ""}">${free}/${list.length} free</span></div>`;
+        <span class="count ${free ? "free" : ""}">${tr(this._hass, "n_free", { free, total: list.length })}</span></div>`;
       body += list.map((s) => this._row(s)).join("");
     }
-    if (!groups.size) body = `<div class="empty">No Reve chargers found.</div>`;
+    if (!groups.size) body = `<div class="empty">${tr(this._hass, "empty")}</div>`;
     const header = title
-      || (groups.size === 1 ? [...groups.keys()][0] : "Reve chargers");
+      || (groups.size === 1 ? [...groups.keys()][0] : tr(this._hass, "title"));
     this.shadowRoot.innerHTML = `
       <style>
         .row{display:flex;align-items:center;gap:12px;padding:10px 16px}
@@ -224,13 +278,13 @@ class ReveLocationCardEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (item) => ({
-        title: "Title (optional)",
-        location: "Location (empty = all locations)",
-        entities: "Chargers (optional, overrides location)",
-        watch_hours: "Keep the alert armed for",
-        notify_entity_id: "Notify through (empty = Home Assistant notification)",
-      })[item.name] || item.name;
+      this._form.computeLabel = (item) => {
+        const key = {
+          title: "editor_title", location: "editor_location", entities: "editor_entities",
+          watch_hours: "editor_watch_hours", notify_entity_id: "editor_notify",
+        }[item.name];
+        return key ? tr(this._hass, key) : item.name;
+      };
       this._form.addEventListener("value-changed", (ev) => {
         const config = { ...ev.detail.value };
         for (const [k, v] of Object.entries(config)) {
