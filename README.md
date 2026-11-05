@@ -2,6 +2,12 @@
 
 Monitor public EV chargers listed on [Mapa Reve](https://www.mapareve.es) and get notified when an occupied one is free again.
 
+## Installation
+
+**HACS (custom repository):** HACS → ⋮ → *Custom repositories* → add `https://github.com/ArnyminerZ/ha-reve` as type *Integration* → install *Reve* → restart Home Assistant. Then *Settings → Devices & services → Add integration → Reve*.
+
+**Manual:** copy `custom_components/reve` into your Home Assistant `custom_components` folder and restart.
+
 ## How it works
 
 * **Hub (gateway)** – add the integration once with your personal Reve API key.
