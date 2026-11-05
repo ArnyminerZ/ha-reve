@@ -1,0 +1,176 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connectar amb Reve",
+        "description": "Introdueix la teua API key personal de Reve. Fa de passarel·la: després podràs afegir carregadors amb el seu EVSE id.",
+        "data": {
+          "api_key": "API key",
+          "rate_tier": "Pla de l'API"
+        },
+        "data_description": {
+          "rate_tier": "Les claus estàndard permeten 5 peticions per URL i hora; les especials, 100. Això limita la freqüència de consulta dels carregadors."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Tornar a autenticar",
+        "description": "L'API key ha sigut rebutjada. Introdueix una clau vàlida.",
+        "data": {
+          "api_key": "API key"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar Reve",
+        "data": {
+          "api_key": "API key",
+          "rate_tier": "Pla de l'API"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "L'API key ha sigut rebutjada.",
+      "cannot_connect": "No s'ha pogut connectar amb l'API de Reve.",
+      "rate_limited": "S'ha esgotat la quota de peticions. Torna-ho a provar més tard.",
+      "unknown": "Error inesperat."
+    },
+    "abort": {
+      "already_configured": "Aquesta API key ja està configurada.",
+      "reauth_successful": "Reautenticació completada correctament.",
+      "reconfigure_successful": "Reconfiguració completada correctament."
+    }
+  },
+  "config_subentries": {
+    "charger": {
+      "initiate_flow": {
+        "user": "Afegir carregador"
+      },
+      "entry_type": "Carregador",
+      "step": {
+        "user": {
+          "title": "Afegir carregador",
+          "description": "Introdueix l'EVSE id del carregador, p. ex. `ES*IBD*E142206*1`.",
+          "data": {
+            "evse_id": "EVSE id",
+            "name": "Nom (opcional)"
+          }
+        }
+      },
+      "error": {
+        "invalid_evse_id": "EVSE id no vàlid. S'espera un format com ES*IBD*E142206*1.",
+        "evse_not_found": "No s'ha trobat cap carregador amb eixe EVSE id.",
+        "invalid_auth": "L'API key ha sigut rebutjada.",
+        "cannot_connect": "No s'ha pogut connectar amb l'API de Reve.",
+        "rate_limited": "S'ha esgotat la quota de peticions. Torna-ho a provar més tard.",
+        "unknown": "Error inesperat."
+      },
+      "abort": {
+        "already_configured": "Aquest carregador ja està afegit."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Consulta periòdica",
+        "description": "Cada quant consultar els carregadors. El mínim ({minimum} min) manté les peticions dins de la teua quota de l'API.",
+        "data": {
+          "scan_interval": "Interval de consulta"
+        }
+      }
+    }
+  },
+  "selector": {
+    "rate_tier": {
+      "options": {
+        "standard": "Estàndard (5 peticions/URL/hora)",
+        "special": "Especial (100 peticions/URL/hora)"
+      }
+    }
+  },
+  "device": {
+    "connector": {
+      "name": "Connector {number}"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "available": "Disponible",
+          "blocked": "Bloquejat",
+          "charging": "Carregant",
+          "inoperative": "Inoperatiu",
+          "outoforder": "Fora de servei",
+          "planned": "Planificat",
+          "removed": "Retirat",
+          "reserved": "Reservat",
+          "unknown": "Desconegut"
+        }
+      },
+      "last_status_change": {
+        "name": "Últim canvi d'estat"
+      },
+      "watching_until": {
+        "name": "Avís de disponibilitat fins a"
+      },
+      "connector_max_power": {
+        "name": "Potència màxima"
+      },
+      "connector_max_current": {
+        "name": "Corrent màxim"
+      },
+      "connector_type": {
+        "name": "Tipus de connector"
+      }
+    },
+    "binary_sensor": {
+      "free": {
+        "name": "Lliure"
+      }
+    },
+    "event": {
+      "availability_alert": {
+        "name": "Avís de disponibilitat",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "available": "Disponible"
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "already_available": {
+      "message": "{name} ja està disponible."
+    },
+    "invalid_duration": {
+      "message": "La durada ha de ser major que zero i com a màxim 7 dies."
+    }
+  },
+  "services": {
+    "watch_availability": {
+      "name": "Avisar quan estiga disponible",
+      "description": "Rep un avís quan el carregador quede disponible dins del temps indicat.",
+      "fields": {
+        "duration": {
+          "name": "Vigilar durant",
+          "description": "Durant quant de temps vigilar (màx. 7 dies)."
+        },
+        "notify_entity_id": {
+          "name": "Entitats de notificació",
+          "description": "Entitats notify a avisar. Si està buit, es crea una notificació persistent."
+        },
+        "message": {
+          "name": "Missatge",
+          "description": "Missatge personalitzat. Per defecte, un missatge que indica que el carregador ja està disponible."
+        }
+      }
+    },
+    "cancel_watch": {
+      "name": "Cancel·lar l'avís de disponibilitat",
+      "description": "Deixa de vigilar el carregador."
+    }
+  }
+}
