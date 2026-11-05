@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.event import async_call_later
@@ -19,7 +24,20 @@ from .entity import register_charger_devices
 RELOAD_DELAY = 3
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.EVENT, Platform.SENSOR]
 
+CARD_URL = "/reve_static/reve-location-card.js"
+
 type ReveConfigEntry = ConfigEntry[ReveCoordinator]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the bundled dashboard card and load it in the frontend."""
+    www = Path(__file__).parent / "www"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig("/reve_static", str(www), cache_headers=False)]
+    )
+    integration = await async_get_integration(hass, DOMAIN)
+    add_extra_js_url(hass, f"{CARD_URL}?v={integration.version}")
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ReveConfigEntry) -> bool:

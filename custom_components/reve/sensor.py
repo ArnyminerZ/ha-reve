@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.sensor import (
@@ -27,6 +28,8 @@ from .const import (
     ATTR_MESSAGE,
     ATTR_NOTIFY_ENTITIES,
     CONF_CONNECTORS,
+    CONF_LOCATION_ID,
+    CONF_LOCATION_NAME,
     DOMAIN,
     SERVICE_CANCEL_WATCH,
     SERVICE_WATCH,
@@ -92,10 +95,32 @@ class ReveStatusSensor(ReveChargerEntity, SensorEntity):
     def __init__(self, coordinator: ReveCoordinator, subentry: ConfigSubentry) -> None:
         super().__init__(coordinator, subentry)
         self._attr_unique_id = f"{self.evse_id}_status"
+        self._location_id = subentry.data.get(CONF_LOCATION_ID)
+        self._location_name = subentry.data.get(CONF_LOCATION_NAME)
+        self._connectors = [
+            {
+                "standard": c.get("standard"),
+                "power_type": c.get("power_type"),
+                "max_power": c.get("max_electric_power"),
+            }
+            for c in subentry.data.get(CONF_CONNECTORS) or []
+        ]
 
     @property
     def native_value(self) -> str | None:
         return self.status.status.lower() if self.status else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Data the Reve dashboard card uses to group and describe chargers."""
+        watch = self.coordinator.watches.get(self.evse_id)
+        return {
+            "location_id": self._location_id,
+            "location_name": self._location_name,
+            "connectors": self._connectors,
+            "last_status_change": self.status.last_updated if self.status else None,
+            "watching_until": watch.expires_at if watch else None,
+        }
 
     async def async_watch_availability(
         self,

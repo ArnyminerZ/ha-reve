@@ -47,6 +47,18 @@ data:
 
 When the status becomes `AVAILABLE` within the window the alert is sent once, the `event` entity fires and the `reve_charger_available` bus event is emitted. Cancel with `reve.cancel_watch`. Pending alerts survive restarts. Because they are plain actions, a dashboard button or a phone notification action can arm them too.
 
+## Dashboard card
+
+The integration bundles a Lovelace card, loaded automatically (no resource to add). It lists every charger of a location with its state (free / in use / out of service), how long it has been in that state, and a **Notify me** button that arms the availability alert (tap again to cancel).
+
+```yaml
+type: custom:reve-location-card
+location: My location      # name or id; omit to show every location
+# entities: [sensor.garage]   # or pick chargers explicitly
+# watch_hours: 2              # how long the alert stays armed
+# notify_entity_id: notify.mobile_app_phone
+```
+
 ## API limits (important)
 
 Reve limits each key per hour: **standard keys 5 requests per URL and 1000 in total; special keys 100 / 3000**. Since every charger status is its own URL, the default polling is **every 20 minutes** (standard) or 5 minutes (special). Choose your plan when adding the integration; the polling interval option cannot go below what the quota allows. Reloading the integration re-polls every charger, which counts against the quota. Alerts are therefore only as fast as your polling interval.

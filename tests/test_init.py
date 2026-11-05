@@ -93,3 +93,14 @@ async def test_watch_notifies_when_free(hass: HomeAssistant, mock_api) -> None:
     assert len(events) == 1
     assert hass.states.get("sensor.garage_availability_alert_until").state == "unknown"
     assert hass.states.get("event.garage_availability_alert").state != "unknown"
+
+
+async def test_status_sensor_exposes_card_attributes(hass: HomeAssistant, mock_api) -> None:
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    attrs = hass.states.get("sensor.garage").attributes
+    assert {"location_id", "location_name", "connectors", "watching_until"} <= set(attrs)
+    assert attrs["connectors"]
