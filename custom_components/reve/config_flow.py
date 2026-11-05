@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
 import voluptuous as vol
@@ -12,6 +14,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentry,
     ConfigSubentryFlow,
     OptionsFlow,
     SubentryFlowResult,
@@ -56,6 +59,8 @@ from .const import (
     min_interval_minutes,
 )
 
+_LOGGER = logging.getLogger(__name__)
+MAX_SIBLINGS = 12
 EVSE_ID_RE = re.compile(r"^[A-Z]{2}\*[A-Z0-9]{3}\*E[A-Z0-9*]+$")
 
 TIER_SELECTOR = SelectSelector(
@@ -196,8 +201,62 @@ class ReveConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
 
+def _charger_data(evse_id: str, evse: dict[str, Any]) -> dict[str, Any]:
+    """Static data stored in a charger subentry."""
+    coords = evse.get("coordinates") or {}
+    return {
+        CONF_EVSE_ID: evse_id,
+        CONF_EVSE_UID: evse.get("id"),
+        CONF_PHYSICAL_REFERENCE: evse.get("physical_reference"),
+        CONF_COORDINATES: {
+            "latitude": coords.get("latitude"),
+            "longitude": coords.get("longitude"),
+        },
+        CONF_CONNECTORS: [
+            {
+                "id": c.get("id"),
+                "standard": c.get("standard"),
+                "format": c.get("format"),
+                "power_type": c.get("power_type"),
+                "max_electric_power": c.get("max_electric_power"),
+                "max_voltage": c.get("max_voltage"),
+                "max_amperage": c.get("max_amperage"),
+            }
+            for c in evse.get("connectors") or []
+        ],
+    }
+
+
+async def _discover_station(api: ReveApi, evse_id: str) -> dict[str, dict[str, Any]]:
+    """Fetch the entered EVSE plus its siblings (same station, other numbers).
+
+    EVSE ids end in the outlet number (ES*IBD*E11900*1, ...*2, ...). Siblings
+    are probed from 1 upwards; probing stops at the first gap after the entered
+    number. Only the entered EVSE is allowed to raise; sibling failures are skipped.
+    """
+    found = {evse_id: await api.get_evse(evse_id)}
+    prefix, _, number = evse_id.rpartition("*")
+    if not number.isdigit():
+        return found
+    entered = int(number)
+    for n in range(1, MAX_SIBLINGS + 1):
+        sibling = f"{prefix}*{n}"
+        if sibling == evse_id:
+            continue
+        try:
+            found[sibling] = await api.get_evse(sibling)
+        except ReveAuthError:
+            raise
+        except ReveNotFoundError:
+            if n > entered:
+                break
+        except ReveError:
+            _LOGGER.debug("Could not probe sibling %s", sibling)
+    return dict(sorted(found.items(), key=lambda kv: int(kv[0].rpartition("*")[2])))
+
+
 class ChargerSubentryFlow(ConfigSubentryFlow):
-    """Add a charger through its EVSE id."""
+    """Add a charger (and the other outlets of its station) by EVSE id."""
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         entry = self._get_entry()
@@ -206,12 +265,10 @@ class ChargerSubentryFlow(ConfigSubentryFlow):
             evse_id = user_input[CONF_EVSE_ID].strip().upper()
             if not EVSE_ID_RE.match(evse_id):
                 errors[CONF_EVSE_ID] = "invalid_evse_id"
-            elif any(s.data.get(CONF_EVSE_ID) == evse_id for s in entry.subentries.values()):
-                return self.async_abort(reason="already_configured")
             else:
                 api = ReveApi(async_get_clientsession(self.hass), entry.data[CONF_API_KEY])
                 try:
-                    evse = await api.get_evse(evse_id)
+                    found = await _discover_station(api, evse_id)
                 except ReveNotFoundError:
                     errors[CONF_EVSE_ID] = "evse_not_found"
                 except ReveAuthError:
@@ -223,31 +280,33 @@ class ChargerSubentryFlow(ConfigSubentryFlow):
                 except ReveError:
                     errors["base"] = "unknown"
                 else:
-                    coords = evse.get("coordinates") or {}
+                    known = {s.unique_id for s in entry.subentries.values()}
+                    new = {k: v for k, v in found.items() if k not in known}
+                    if not new:
+                        return self.async_abort(reason="already_configured")
+                    name = (user_input.get("name") or "").strip()
+                    multiple = len(found) > 1
+
+                    def title(eid: str) -> str:
+                        if not name:
+                            return eid
+                        return f"{name} {eid.rpartition('*')[2]}" if multiple else name
+
+                    items = list(new.items())
+                    # The flow itself creates the first one; add the rest directly.
+                    for eid, evse in items[1:]:
+                        self.hass.config_entries.async_add_subentry(
+                            entry,
+                            ConfigSubentry(
+                                data=MappingProxyType(_charger_data(eid, evse)),
+                                subentry_type=SUBENTRY_TYPE_CHARGER,
+                                title=title(eid),
+                                unique_id=eid,
+                            ),
+                        )
+                    eid, evse = items[0]
                     return self.async_create_entry(
-                        title=user_input.get("name") or evse_id,
-                        unique_id=evse_id,
-                        data={
-                            CONF_EVSE_ID: evse_id,
-                            CONF_EVSE_UID: evse.get("id"),
-                            CONF_PHYSICAL_REFERENCE: evse.get("physical_reference"),
-                            CONF_COORDINATES: {
-                                "latitude": coords.get("latitude"),
-                                "longitude": coords.get("longitude"),
-                            },
-                            CONF_CONNECTORS: [
-                                {
-                                    "id": c.get("id"),
-                                    "standard": c.get("standard"),
-                                    "format": c.get("format"),
-                                    "power_type": c.get("power_type"),
-                                    "max_electric_power": c.get("max_electric_power"),
-                                    "max_voltage": c.get("max_voltage"),
-                                    "max_amperage": c.get("max_amperage"),
-                                }
-                                for c in evse.get("connectors") or []
-                            ],
-                        },
+                        title=title(eid), unique_id=eid, data=_charger_data(eid, evse)
                     )
         return self.async_show_form(
             step_id="user",

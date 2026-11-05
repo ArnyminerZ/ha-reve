@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntry
+from homeassistant.helpers.event import async_call_later
 
 from .api import ReveApi
 from .const import CONF_API_KEY, CONF_EVSE_ID, DOMAIN, SUBENTRY_TYPE_CHARGER
 from .coordinator import ReveCoordinator
 from .entity import register_charger_devices
 
+RELOAD_DELAY = 3
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.EVENT, Platform.SENSOR]
 
 type ReveConfigEntry = ConfigEntry[ReveCoordinator]
@@ -27,15 +31,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ReveConfigEntry) -> bool
     entry.runtime_data = coordinator
     entry.async_on_unload(coordinator.async_shutdown_watches)
 
-    # Adding / removing a charger subentry reloads the entry.
+    # Adding / removing chargers (or changing options) reloads the entry. Debounce it:
+    # a reload re-polls every charger and the API quota is tight.
+    cancel_reload: CALLBACK_TYPE | None = None
+
+    @callback
+    def _cancel() -> None:
+        nonlocal cancel_reload
+        if cancel_reload:
+            cancel_reload()
+            cancel_reload = None
+
+    async def _async_update_listener(hass: HomeAssistant, entry: ReveConfigEntry) -> None:
+        nonlocal cancel_reload
+        _cancel()
+
+        @callback
+        def _reload(_now: datetime) -> None:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+
+        cancel_reload = async_call_later(hass, RELOAD_DELAY, _reload)
+
+    entry.async_on_unload(_cancel)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     register_charger_devices(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
-
-
-async def _async_update_listener(hass: HomeAssistant, entry: ReveConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ReveConfigEntry) -> bool:

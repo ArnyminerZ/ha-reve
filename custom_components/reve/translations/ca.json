@@ -48,7 +48,7 @@
       "step": {
         "user": {
           "title": "Afegir carregador",
-          "description": "Introdueix l'EVSE id del carregador, p. ex. `ES*IBD*E142206*1`.",
+          "description": "Introdueix l'EVSE id del carregador, p. ex. `ES*IBD*E142206*1`. També s'afegeixen els altres punts de la mateixa estació (p. ex. `*2`, `*3`).",
           "data": {
             "evse_id": "EVSE id",
             "name": "Nom (opcional)"

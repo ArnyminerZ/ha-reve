@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.util import dt as dt_util
 
-from custom_components.reve.api import ReveStatus
+from custom_components.reve.api import ReveNotFoundError, ReveStatus
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +41,13 @@ def mock_api():
     ):
         api = cls.return_value
         api.validate = AsyncMock()
-        api.get_evse = AsyncMock(return_value=EVSE)
+
+        async def get_evse(evse_id):
+            if evse_id in api.stations:
+                return {**EVSE, "evse_id": evse_id}
+            raise ReveNotFoundError
+
+        api.stations = {"ES*IBD*E142206*1", "ES*IBD*E11900*1", "ES*IBD*E11900*2"}
+        api.get_evse = AsyncMock(side_effect=get_evse)
         api.get_status = AsyncMock(return_value=status)
         yield api
