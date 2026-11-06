@@ -83,6 +83,9 @@ class ReveCoordinator(DataUpdateCoordinator[dict[str, ReveStatus]]):
             update_interval=timedelta(minutes=minutes),
         )
         self.api = api
+        self._tier = tier
+        self._base_interval = timedelta(minutes=minutes)
+        self._last_fetch: dict[str, datetime] = {}
         self.watches: dict[str, Watch] = {}
         self._store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.watches"
@@ -103,9 +106,23 @@ class ReveCoordinator(DataUpdateCoordinator[dict[str, ReveStatus]]):
     async def _async_update_data(self) -> dict[str, ReveStatus]:
         data: dict[str, ReveStatus] = {}
         errors: list[Exception] = []
+        now = dt_util.utcnow()
         for evse_id in self.evse_ids:
+            # While alerts are armed the coordinator ticks faster; chargers
+            # nobody is waiting for keep their regular (slower) cadence.
+            last = self._last_fetch.get(evse_id)
+            if (
+                evse_id not in self.watches
+                and last is not None
+                and self.data
+                and evse_id in self.data
+                and now - last < self._base_interval - timedelta(seconds=30)
+            ):
+                data[evse_id] = self.data[evse_id]
+                continue
             try:
                 data[evse_id] = await self.api.get_status(evse_id)
+                self._last_fetch[evse_id] = now
             except ReveAuthError as err:
                 raise ConfigEntryAuthFailed from err
             except ReveNotFoundError:
@@ -134,6 +151,7 @@ class ReveCoordinator(DataUpdateCoordinator[dict[str, ReveStatus]]):
                     evse_id,
                     Watch(expires, raw.get("notify_entities", []), raw.get("message")),
                 )
+        self._adjust_interval()
 
     def _set_watch(self, evse_id: str, watch: Watch) -> None:
         self._clear_timer(evse_id)
@@ -152,12 +170,27 @@ class ReveCoordinator(DataUpdateCoordinator[dict[str, ReveStatus]]):
         if timer := self._expiry_timers.pop(evse_id, None):
             timer()
 
+    @callback
+    def _adjust_interval(self) -> None:
+        """Poll as fast as the quota allows while any alert is armed."""
+        if self.watches:
+            interval = min(
+                self._base_interval,
+                timedelta(minutes=min_interval_minutes(self._tier, len(self.watches))),
+            )
+        else:
+            interval = self._base_interval
+        if interval != self.update_interval:
+            self.update_interval = interval
+            self._schedule_refresh()
+
     def _save(self) -> None:
         self._store.async_delay_save(lambda: {k: w.as_dict() for k, w in self.watches.items()}, 1)
 
     @callback
     def start_watch(self, evse_id: str, watch: Watch) -> None:
         self._set_watch(evse_id, watch)
+        self._adjust_interval()
         self._save()
         self.async_update_listeners()
 
@@ -165,6 +198,7 @@ class ReveCoordinator(DataUpdateCoordinator[dict[str, ReveStatus]]):
     def cancel_watch(self, evse_id: str) -> None:
         self._clear_timer(evse_id)
         if self.watches.pop(evse_id, None):
+            self._adjust_interval()
             self._save()
             self.async_update_listeners()
 
